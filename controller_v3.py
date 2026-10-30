@@ -36,17 +36,17 @@ class UdpMeasureController(app_manager.RyuApp):
         hub.spawn(self._control_loop)
 
     # ---------- helpers ----------
-    def log_event(self, msg):
-        self.logger.info(msg)
+    def log_event(self, msg):                                                                                        #logs an event to the console
+        self.logger.info(msg)                                                                                        
         self.evt_csv.write(f'{time.time():.3f},{msg}\n')
 
-    def _flow(self, dp, prio, match, port, cmd):
+    def _flow(self, dp, prio, match, port, cmd):                                                                      #sends one flow rule to a switch
         p, o = dp.ofproto_parser, dp.ofproto
         inst = [p.OFPInstructionActions(o.OFPIT_APPLY_ACTIONS, [p.OFPActionOutput(port)])]
         dp.send_msg(p.OFPFlowMod(datapath=dp, command=cmd, priority=prio,
                                  match=match, instructions=inst))
 
-    def install(self, dp, path, cmd):
+    def install(self, dp, path, cmd):                                                                                 #installs all rules for one switch
         p = dp.ofproto_parser
         table = PATHS[path][dp.id]
         for ip, port in table.items():
@@ -55,7 +55,7 @@ class UdpMeasureController(app_manager.RyuApp):
                    p.OFPMatch(eth_type=0x0800, ip_proto=17, ipv4_dst=H2, udp_dst=UDP_PORT),
                    table[H2], cmd)
 
-    def reroute(self, path, reason):
+    def reroute(self, path, reason):                                                                                  #moves all switches to a new path
         self.path = path
         for dp in self.dps.values():
             # MODIFY_STRICT keeps the flow counters (important for the comparison)
@@ -63,14 +63,14 @@ class UdpMeasureController(app_manager.RyuApp):
         self.log_event(f'reroute_to_{path};{reason}')
 
     # ---------- OpenFlow events ----------
-    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)                                                  #runs when a switch first connects               
     def on_features(self, ev):
         dp = ev.msg.datapath
         self.dps[dp.id] = dp
         self.install(dp, self.path, dp.ofproto.OFPFC_ADD)
         self.log_event(f'switch_connected;s{dp.id}')
 
-    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)                                                    #runs when a switch replies with flow stats
     def on_flow_stats(self, ev):
         dpid, now = ev.msg.datapath.id, time.time()
         for st in ev.msg.body:
@@ -82,7 +82,7 @@ class UdpMeasureController(app_manager.RyuApp):
             if dpid == 1:
                 self._check_congestion(st)
 
-    @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)                                                         #runs when a port chanes state                         
     def on_port_status(self, ev):
         msg, dp = ev.msg, ev.msg.datapath
         down = bool(msg.desc.state & dp.ofproto.OFPPS_LINK_DOWN)
@@ -113,16 +113,16 @@ class UdpMeasureController(app_manager.RyuApp):
                 self.hits = 0
 
     # ---------- background loops ----------
-    def _req(self, dp):
+    def _req(self, dp):                                                                                                     #asks a switch for its flow statistics
         dp.send_msg(dp.ofproto_parser.OFPFlowStatsRequest(dp))
 
-    def _poll_loop(self):
+    def _poll_loop(self):                                                                                                   #endless polling loop
         while True:
             for dp in list(self.dps.values()):
                 self._req(dp)
             hub.sleep(POLL_SEC)
 
-    def _control_loop(self):
+    def _control_loop(self):                                                                                                #creates a UDP socket and sends the replies back
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(CTRL_ADDR)
@@ -131,7 +131,7 @@ class UdpMeasureController(app_manager.RyuApp):
             parts = data.decode().split()
             sock.sendto(self._handle(parts).encode(), addr)
 
-    def _handle(self, parts):
+    def _handle(self, parts):                                                                                               #command interpreter 
         if not parts:
             return 'ERR'
         cmd = parts[0].upper()
